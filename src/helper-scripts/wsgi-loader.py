@@ -37,7 +37,7 @@ def try_write_file(path, contents):
 		with open(path, 'w') as f:
 			f.write(contents)
 	except IOError as e:
-		logging.warn('Warning: unable to write to ' + path + ': ' + e.message)
+		logging.warn(f'Warning: unable to write to {path}: {e.message}')
 
 def initialize_logging():
 	logging.basicConfig(
@@ -50,23 +50,24 @@ def read_startup_arguments():
 	global options
 
 	work_dir = os.getenv('PASSENGER_SPAWN_WORK_DIR')
-	path = work_dir + '/args.json'
+	path = f'{work_dir}/args.json'
 	with open(path, 'r') as f:
 		options = json.load(f)
 
 def record_journey_step_begin(step, state):
 	work_dir = os.getenv('PASSENGER_SPAWN_WORK_DIR')
-	step_dir = work_dir + '/response/steps/' + step.lower()
-	try_write_file(step_dir + '/state', state)
-	try_write_file(step_dir + '/begin_time', str(time.time()))
+	step_dir = f'{work_dir}/response/steps/{step.lower()}'
+	try_write_file(f'{step_dir}/state', state)
+	try_write_file(f'{step_dir}/begin_time', str(time.time()))
 
 def record_journey_step_end(step, state):
 	work_dir = os.getenv('PASSENGER_SPAWN_WORK_DIR')
-	step_dir = work_dir + '/response/steps/' + step.lower()
-	try_write_file(step_dir + '/state', state)
-	if not os.path.exists(step_dir + '/begin_time') and not os.path.exists(step_dir + '/begin_time_monotonic'):
-		try_write_file(step_dir + '/begin_time', str(time.time()))
-	try_write_file(step_dir + '/end_time', str(time.time()))
+	step_dir = f'{work_dir}/response/steps/{step.lower()}'
+	try_write_file(f'{step_dir}/state', state)
+	if not os.path.exists(f'{step_dir}/begin_time') and not os.path.exists(
+	    step_dir + '/begin_time_monotonic'):
+		try_write_file(f'{step_dir}/begin_time', str(time.time()))
+	try_write_file(f'{step_dir}/end_time', str(time.time()))
 
 def load_app():
 	global options
@@ -90,19 +91,18 @@ def create_server_socket():
 	while i < 128:
 		s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 		socket_suffix = format(struct.unpack('Q', os.urandom(8))[0], 'x')
-		filename = socket_dir + '/' + socket_prefix + '.' + socket_suffix
-		filename = filename[0:UNIX_PATH_MAX]
+		filename = f'{socket_dir}/{socket_prefix}.{socket_suffix}'
+		filename = filename[:UNIX_PATH_MAX]
 		try:
 			s.bind(filename)
 			break
 		except socket.error as e:
-			if e.errno == errno.EADDRINUSE:
-				i += 1
-				if i == 128:
-					raise e
-			else:
+			if e.errno != errno.EADDRINUSE:
 				raise e
 
+			i += 1
+			if i == 128:
+				raise e
 	s.listen(1000)
 	return (filename, s)
 
@@ -115,7 +115,7 @@ def install_signal_handlers():
 			for filename, lineno, name, line in traceback.extract_stack(stack):
 				code.append('  File: "%s", line %d, in %s' % (filename, lineno, name))
 				if line:
-					code.append("    %s" % (line.strip()))
+					code.append(f"    {line.strip()}")
 		print("\n".join(code))
 
 	def debug_and_exit(sig, frame):
@@ -130,24 +130,22 @@ def install_signal_handlers():
 
 def advertise_sockets(socket_filename):
 	work_dir = os.getenv('PASSENGER_SPAWN_WORK_DIR')
-	path = work_dir + '/response/properties.json'
+	path = f'{work_dir}/response/properties.json'
 	doc = {
-		'sockets': [
-			{
-				'name': 'main',
-				'address': 'unix:' + socket_filename,
-				'protocol': 'session',
-				'concurrency': 1,
-				'accept_http_requests': True
-			}
-		]
+	    'sockets': [{
+	        'name': 'main',
+	        'address': f'unix:{socket_filename}',
+	        'protocol': 'session',
+	        'concurrency': 1,
+	        'accept_http_requests': True,
+	    }]
 	}
 	with open(path, 'w') as f:
 		json.dump(doc, f)
 
 def advertise_readiness():
 	work_dir = os.getenv('PASSENGER_SPAWN_WORK_DIR')
-	path = work_dir + '/response/finish'
+	path = f'{work_dir}/response/finish'
 	with open(path, 'w') as f:
 		f.write('1')
 
@@ -159,10 +157,7 @@ if sys.version_info[0] >= 3:
 		return b.decode('latin-1')
 
 	def str_to_bytes(s):
-		if isinstance(s, bytes):
-			return s
-		else:
-			return s.encode('latin-1')
+		return s if isinstance(s, bytes) else s.encode('latin-1')
 else:
 	def reraise_exception(exc_info):
 		exec("raise exc_info[0], exc_info[1], exc_info[2]")
@@ -190,21 +185,20 @@ class RequestHandler:
 					break
 				socket_hijacked = False
 				try:
-					try:
-						env, input_stream = self.parse_request(client)
-						if env:
-							if env['REQUEST_METHOD'] == 'ping':
-								self.process_ping(env, input_stream, client)
-							else:
-								socket_hijacked = self.process_request(env, input_stream, client)
-					except KeyboardInterrupt:
-						done = True
-					except IOError:
-						e = sys.exc_info()[1]
-						if not getattr(e, 'passenger', False) or e.errno != errno.EPIPE:
-							logging.exception("WSGI application raised an I/O exception!")
-					except Exception:
-						logging.exception("WSGI application raised an exception!")
+					env, input_stream = self.parse_request(client)
+					if env:
+						if env['REQUEST_METHOD'] == 'ping':
+							self.process_ping(env, input_stream, client)
+						else:
+							socket_hijacked = self.process_request(env, input_stream, client)
+				except KeyboardInterrupt:
+					done = True
+				except IOError:
+					e = sys.exc_info()[1]
+					if not getattr(e, 'passenger', False) or e.errno != errno.EPIPE:
+						logging.exception("WSGI application raised an I/O exception!")
+				except Exception:
+					logging.exception("WSGI application raised an exception!")
 				finally:
 					if not socket_hijacked:
 						try:
@@ -222,10 +216,7 @@ class RequestHandler:
 
 	def accept_connection(self):
 		result = select.select([self.owner_pipe, self.server.fileno()], [], [])[0]
-		if self.server.fileno() in result:
-			return self.server.accept()
-		else:
-			return (None, None)
+		return self.server.accept() if self.server.fileno() in result else (None, None)
 
 	def parse_request(self, client):
 		buf = b''
