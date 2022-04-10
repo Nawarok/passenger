@@ -12,10 +12,7 @@ if sys.version_info[0] >= 3:
 		return b.decode()
 
 	def str_to_bytes(s):
-		if isinstance(s, bytes):
-			return s
-		else:
-			return s.encode('latin-1')
+		return s if isinstance(s, bytes) else s.encode('latin-1')
 
 	def iteritems(d):
 		return d.items()
@@ -59,16 +56,16 @@ def application(env, start_response):
 		body = "Method: %s\nFirst: %s\nSecond: %s\n" % (method, first, second)
 	elif path == '/chunked':
 		def body():
-			yield str("7\r\nchunk1\n\r\n")
-			yield str("7\r\nchunk2\n\r\n")
-			yield str("7\r\nchunk3\n\r\n")
-			yield str("0\r\n\r\n")
+			yield "7\r\nchunk1\n\r\n"
+			yield "7\r\nchunk2\n\r\n"
+			yield "7\r\nchunk3\n\r\n"
+			yield "0\r\n\r\n"
 			sleep_time = float(env.get('HTTP_X_SLEEP_WHEN_DONE', 0))
 			time.sleep(sleep_time)
 			if env.get('HTTP_X_EXTRA_DATA') is not None:
 				status = False
 				try:
-					yield str("7\r\nchunk4\n\r\n")
+					yield "7\r\nchunk4\n\r\n"
 					status = True
 				finally:
 					filename = env.get('HTTP_X_TAIL_STATUS_FILE')
@@ -141,7 +138,7 @@ def application(env, start_response):
 		def body():
 			i = 0
 			while i < count:
-				data = "Counter: " + str(i) + "\n"
+				data = f"Counter: {i}" + "\n"
 				yield("%x\r\n" % len(data))
 				yield(data)
 				yield("\r\n")
@@ -172,7 +169,7 @@ def application(env, start_response):
 			if env.get('HTTP_X_EXTRA_DATA') is not None:
 				status = False
 				try:
-					yield str("tail")
+					yield "tail"
 					status = True
 				finally:
 					filename = env.get('HTTP_X_TAIL_STATUS_FILE')
