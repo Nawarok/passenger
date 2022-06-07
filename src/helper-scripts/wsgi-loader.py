@@ -65,7 +65,7 @@ def record_journey_step_end(step, state):
 	step_dir = f'{work_dir}/response/steps/{step.lower()}'
 	try_write_file(f'{step_dir}/state', state)
 	if not os.path.exists(f'{step_dir}/begin_time') and not os.path.exists(
-	    step_dir + '/begin_time_monotonic'):
+	    f'{step_dir}/begin_time_monotonic'):
 		try_write_file(f'{step_dir}/begin_time', str(time.time()))
 	try_write_file(f'{step_dir}/end_time', str(time.time()))
 
